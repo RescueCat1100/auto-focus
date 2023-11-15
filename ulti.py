@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.image as pltim
 import matplotlib.pyplot as plt
 from PIL import Image
+import cv2
 
 
 def Convolution(image: np.ndarray, kernel) -> np.ndarray:
@@ -94,48 +95,111 @@ def Enhanced(image, filter):
     return enhanced_img
 
 
-class RetargetedImage:
-    imageDirectory = ""
-    image = None
-    grayImage = None
+def Bokeh(image):
+    # read input and convert to grayscale
+    img = cv2.imread('img.jpg', cv2.IMREAD_GRAYSCALE)
 
-    def __init__(self, imageDirectory):
-        self.imageDirectory = imageDirectory
-        self.image = pltim.imread(self.imageDirectory)
-        # self.grayImage = gray(self.image)
+    # do dft saving as complex output
+    dft_img = np.fft.fft2(img, axes=(0, 1))
 
-    def showOriginalImage(self):
-        plt.imshow(self.image)
-        plt.show()
+    # create circle mask
+    radius = 2
+    mask = np.zeros_like(img)
+    cy = mask.shape[0] // 2
+    cx = mask.shape[1] // 2
+    cv2.circle(mask, (cx, cy), radius, 255, -1)[0]
 
-    def showImage(self):
-        # Convert to Gray Scale
-        gray_img = Gray(self.image)
+    # blur the mask slightly to antialias
+    mask = cv2.GaussianBlur(mask, (3, 3), 0)
 
-        # Blur with Gaussian
-        blurred_image = GaussianBlur(gray_img, 10, (3, 3))
+    # roll the mask so that center is at origin and normalize to sum=1
+    mask_roll = np.roll(mask, (cy, cx), axis=(0, 1))
+    mask_norm = mask_roll / mask_roll.sum()
 
-        # Init Sobel filter Kernel
-        sobel_filter_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
-        sobel_filter_y = np.flip(sobel_filter_x.T, axis=0)
+    # take dft of mask
+    dft_mask_norm = np.fft.fft2(mask_norm, axes=(0, 1))
 
-        # Apply Sobel edge dectection consecutively
-        sobel_img_x = Sobel(blurred_image, sobel_filter_x)
-        sobel_img_y = Sobel(blurred_image, sobel_filter_y)
+    # apply dft_mask to dft_img
+    dft_shift_product = np.multiply(dft_img, dft_mask_norm)
 
-        # Get the edge detection output
-        sobel_output = np.sqrt(np.square(sobel_img_x) + np.square(sobel_img_y))
-        # Take the average of sobel_output to fit it to 255 size
-        sobel_output *= 255.0 / sobel_output.max()
+    # do idft saving as complex output
+    img_filtered = np.fft.ifft2(dft_shift_product, axes=(0, 1))
 
-        # Init enhancing filter
-        enhanced_filter = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-        enhanced_sobel_img = Convolution(sobel_output, enhanced_filter)
-        # plt.imshow(enhanced_sobel_img, cmap='gray')
-        plt.imshow(sobel_output, cmap='gray')
-        # print(sobel_output[399])
-        plt.show()
+    # combine complex real and imaginary components to form (the magnitude for) the original image again
+    img_filtered = np.abs(img_filtered).clip(0, 255).astype(np.uint8)
+
+    cv2.imshow("ORIGINAL", img)
+    cv2.imshow("MASK", mask)
+    cv2.imshow("FILTERED DFT/IFT ROUND TRIP", img_filtered)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+    # write result to disk
+    cv2.imwrite("lena_512_gray_mask.png", mask)
+    cv2.imwrite("lena_dft_numpy_lowpass_filtered_rad32.jpg", img_filtered)
+    pass
 
 
-example1 = RetargetedImage("img.jpg")
-example1.showImage()
+def LensDefocus(img, dim):
+
+    imgarray = np.array(img, dtype="uint8")
+    kernel_w = dim
+    kernel = np.zeros((kernel_w, kernel_w), dtype=np.uint8)
+    kernel = DiskKernel(dim)
+    pass
+
+
+def Show(image):
+    # Convert to Gray Scale
+    gray_img = Gray(image)
+
+    # Blur with Gaussian
+    blurred_image = GaussianBlur(gray_img, 8, (4, 4))
+
+    # Init Sobel filter Kernel
+    sobel_filter_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
+    sobel_filter_y = np.flip(sobel_filter_x.T, axis=0)
+
+    # Apply Sobel edge dectection consecutively
+    sobel_img_x = Sobel(blurred_image, sobel_filter_x)
+    sobel_img_y = Sobel(blurred_image, sobel_filter_y)
+
+    # Get the edge detection output
+    sobel_output = np.sqrt(np.square(sobel_img_x) + np.square(sobel_img_y))
+    # Take the average of sobel_output to fit it to 255 size
+    sobel_output *= 255.0 / sobel_output.max()
+    # Bokeh(image)
+    # Init enhancing filter
+    enhanced_filter = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    # enhanced_sobel_img = Convolution(sobel_output, enhanced_filter)
+    # plt.imshow(enhanced_sobel_img, cmap='gray')
+    # plt.imshow(sobel_output)
+    # print(sobel_output[399])
+    # plt.show()
+    # gradient_magnitude = cv2.imread(sobel_output, cv2.IMREAD_GRAYSCALE)
+
+    # Set a threshold to obtain a binary edge map
+    threshold_value = 50  # Adjust as needed
+    _, binary_edge_map = cv2.threshold(
+        sobel_output, threshold_value, 255, cv2.THRESH_BINARY)
+
+    # Optional: Perform morphological operations for refinement
+    kernel = np.ones((3, 3), np.uint8)
+    binary_edge_map = cv2.morphologyEx(
+        (binary_edge_map), cv2.MORPH_OPEN, kernel)
+    binary_edge_map = cv2.morphologyEx(
+        (binary_edge_map), cv2.MORPH_CLOSE, kernel)
+    # binary_edge_map = cv2.morphologyEx(binary_edge_map, cv2.MORPH_OPEN, kernel)
+
+    # mask = np.zeros(img.shape, dtype='uint8')
+    # background_mask = cv2.bitwise_or(mask, binary_edge_map)
+    # Display the results"""
+    # cv2.imshow("Gradient Magnitude", gradient_magnitude)
+    plt.imshow(blurred_image, cmap='gray')
+    plt.show()
+    pass
+
+
+imgPath = 'img.jpg'
+img = pltim.imread(imgPath)
+Show(img)
