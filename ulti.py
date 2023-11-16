@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.image as pltim
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 from PIL import Image
 import cv2
 
@@ -46,17 +47,12 @@ def Convolution(image: np.ndarray, kernel) -> np.ndarray:
 
 
 def Gray(image):
-    gray_img = np.dot(image, [0.299, 0.587, 0.114]).astype(np.uint8)
-    # plt.imshow(gray_img, cmap='gray', vmin=0, vmax=255)
-    # plt.title("Gray Scale")
-    # plt.show()
+    gray_img = np.dot(image, [0.299, 0.587, 0.114]).astype(np.float32)
     return gray_img
 
 
 def Sobel(image, filter):
     sobel_img = Convolution(image, filter)
-    # plt.imshow(sobel_img, cmap='gray')
-    # plt.show()
     return sobel_img
 
 
@@ -83,10 +79,7 @@ def GaussianBlur(img: np.ndarray, sigma, filter_shape):
             gaussian_filter[y+m_half, x+n_half] = normal * exp_term
 
     blurred = Convolution(img, gaussian_filter)
-    blurred_image = blurred.astype(np.uint8)
-    # plt.imshow(blurred_image, cmap='gray', vmin=0, vmax=255)
-    # plt.title("Gaussian Blur")
-    # plt.show()
+    blurred_image = blurred.astype(np.float32)
     return blurred_image
 
 
@@ -126,7 +119,7 @@ def Bokeh(image):
     img_filtered = np.fft.ifft2(dft_shift_product, axes=(0, 1))
 
     # combine complex real and imaginary components to form (the magnitude for) the original image again
-    img_filtered = np.abs(img_filtered).clip(0, 255).astype(np.uint8)
+    img_filtered = np.abs(img_filtered).clip(0, 255).astype(np.float32)
 
     cv2.imshow("ORIGINAL", img)
     cv2.imshow("MASK", mask)
@@ -152,51 +145,113 @@ def LensDefocus(img, dim):
 def Show(image):
     # Convert to Gray Scale
     gray_img = Gray(image)
-
+    print('slow here 1')
     # Blur with Gaussian
-    blurred_image = GaussianBlur(gray_img, 8, (4, 4))
+    blurred_image = GaussianBlur(gray_img, 5, (2, 2))
+    # gray_img = Gray(blurred_image)
+    blurred_image2 = cv2.GaussianBlur(gray_img, (3, 3), 15)
+    f, axarr = plt.subplots(2, 2)
+    print('slow here 2')
+    axarr[0, 0].imshow(blurred_image, cmap='gray')
 
+    axarr[1, 0].imshow(gray_img)
+    # plt.show()
     # Init Sobel filter Kernel
     sobel_filter_x = np.array([[-1, 0, 1], [-2, 0, 2], [-1, 0, 1]])
     sobel_filter_y = np.flip(sobel_filter_x.T, axis=0)
-
+    print('slow here 3')
     # Apply Sobel edge dectection consecutively
     sobel_img_x = Sobel(blurred_image, sobel_filter_x)
     sobel_img_y = Sobel(blurred_image, sobel_filter_y)
-
+    print('slow here 4')
     # Get the edge detection output
     sobel_output = np.sqrt(np.square(sobel_img_x) + np.square(sobel_img_y))
     # Take the average of sobel_output to fit it to 255 size
+    print('slow here 5')
     sobel_output *= 255.0 / sobel_output.max()
     # Bokeh(image)
     # Init enhancing filter
     enhanced_filter = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    # enhanced_sobel_img = Convolution(sobel_output, enhanced_filter)
-    # plt.imshow(enhanced_sobel_img, cmap='gray')
-    # plt.imshow(sobel_output)
-    # print(sobel_output[399])
-    # plt.show()
-    # gradient_magnitude = cv2.imread(sobel_output, cv2.IMREAD_GRAYSCALE)
-
-    # Set a threshold to obtain a binary edge map
-    threshold_value = 50  # Adjust as needed
-    _, binary_edge_map = cv2.threshold(
-        sobel_output, threshold_value, 255, cv2.THRESH_BINARY)
 
     # Optional: Perform morphological operations for refinement
     kernel = np.ones((3, 3), np.uint8)
-    binary_edge_map = cv2.morphologyEx(
-        (binary_edge_map), cv2.MORPH_OPEN, kernel)
-    binary_edge_map = cv2.morphologyEx(
-        (binary_edge_map), cv2.MORPH_CLOSE, kernel)
-    # binary_edge_map = cv2.morphologyEx(binary_edge_map, cv2.MORPH_OPEN, kernel)
 
-    # mask = np.zeros(img.shape, dtype='uint8')
-    # background_mask = cv2.bitwise_or(mask, binary_edge_map)
-    # Display the results"""
-    # cv2.imshow("Gradient Magnitude", gradient_magnitude)
-    plt.imshow(blurred_image, cmap='gray')
+    axarr[1, 1].imshow(sobel_output, cmap='gray')
+    # plt.show()
+
+    # Threshold the edge map to create a binary image
+    """
+    for row in sobel_output:
+        for pixel_value in row:
+            print(pixel_value, end=' ')
+        print()
+    """
+    # Assuming edge_map is your ndarray binary edge map
+    threshold_value = 10
+    lower_bound = 190
+    upper_bound = lower_bound + threshold_value
+    # Create a new binary image
+    # binary_edge_map = (sobel_output > lower_bound).astype(np.uint8) * 255
+    fig, ax = plt.subplots()
+    # binary_edge_map = (binary_edge_map < upper_bound).astype(np.uint8) * 255
+    binary_edge_map = cv2.inRange(sobel_output, lower_bound, upper_bound)
+    # contours, _ = cv2.findContours(
+    #    binary_edge_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # for contour in contours:
+    #    x, y, w, h = cv2.boundingRect(contour)
+    #    rect = patches.Rectangle(
+    #        (x, y), w, h, linewidth=2, edgecolor='r', facecolor='none')
+    #    ax.add_patch(rect)
+    axarr[0, 1].imshow(binary_edge_map, cmap='gray')
+    row_sums = np.sum((binary_edge_map), axis=1)
+    col_sums = np.sum((binary_edge_map), axis=0)
+    # print(row_sums, col_sums)
+    # Find non-zero indices (rows and columns with white pixels)
+    rows = np.nonzero(row_sums)[0]
+    cols = np.nonzero(col_sums)[0]
+    # print(rows, cols)
+    # Calculate bounding box coordinates
+    x, y, w, h = min(cols), min(rows), max(cols) - \
+        min(cols), max(rows) - min(rows)
+    # Display the result
+
+    ax.imshow(image)
+
+    bb = patches.Rectangle((x, y), w, h, linewidth=2,
+                           edgecolor='r', facecolor='none')
+    ax.add_patch(bb)
+    sobel_output = np.array(sobel_output, np.uint8)
+    contours, _ = cv2.findContours(
+        sobel_output[y:y+h, x:x+w], cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     plt.show()
+    mask = np.zeros_like(sobel_output)
+    cv2.drawContours(mask[y:y+h, x:x+w], contours, -1,
+                     (255, 255, 255), thickness=cv2.FILLED)
+
+    # Use the mask to extract the object
+    object_mask = cv2.bitwise_and(image, mask)
+
+    # Display the result
+    cv2.imshow('Object Mask', object_mask)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    #######
+    mask = np.zeros_like(image)
+
+    # Draw a white rectangle on the mask within the bounding box
+    cv2.rectangle(mask, (x, y), (x + w, y + h),
+                  (255, 255, 255), thickness=cv2.FILLED)
+
+    # Use the mask to blend the original image and a blurred version
+    blurred_img = cv2.GaussianBlur(image, (21, 21), 0)
+    out = np.where(mask != 0, image, blurred_img)
+
+    # Display the result
+    cv2.imshow('Blurred Image', out)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+    # cv2.destroyAllWindows()
+
     pass
 
 

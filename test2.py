@@ -4,7 +4,7 @@ from scipy.signal import convolve2d
 from skimage.draw import disk
 import cv2
 from matplotlib import pyplot as plt
-defocusKernelDims = [5]
+defocusKernelDims = [15]
 
 
 def DefocusBlur_random(img):
@@ -59,5 +59,7 @@ def Adjust(kernel, kernelwidth):
 
 img = cv2.imread('img.jpg')
 img = DefocusBlur_random(img)
+# img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+# img = cv2.GaussianBlur(img, (15, 15),  9)
 plt.imshow(img, cmap='gray')
 plt.show()
