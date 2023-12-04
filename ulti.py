@@ -83,7 +83,7 @@ def GaussianBlur(img: np.ndarray, sigma, filter_shape):
     return blurred_image
 
 
-def my_filter_2d(input_image, kernel):
+def Filter2D(input_image, kernel):
     """
     My own implementation of filter2D from the OpenCV library
     :param input_image: Input image
@@ -131,7 +131,7 @@ def Enhanced(image: np.ndarray, boundingbox):
     obj_region = array[y:y+h, x:x+w]
     result_roi = np.zeros_like(obj_region)
     for i in range(obj_region.shape[2]):  # Loop over each color channel
-        result_roi[:, :, i] = my_filter_2d(obj_region[:, :, i], enhance_kernel)
+        result_roi[:, :, i] = Filter2D(obj_region[:, :, i], enhance_kernel)
 
     array[y:y+h, x:x+w] = result_roi
     return array
@@ -270,7 +270,7 @@ def Show(image):
     gray_img = Gray(img)
     print('slow here 1')
     # Blur with Gaussian
-    blurred_image = GaussianBlur(gray_img, 5, (40, 40))
+    blurred_image = GaussianBlur(gray_img, 8, (2, 2))
     # gray_img = Gray(blurred_image)
     blurred_image2 = cv2.GaussianBlur(gray_img, (3, 3), 15)
     f, axarr = plt.subplots(2, 2)
@@ -364,6 +364,6 @@ def Show(image):
     pass
 
 
-imgPath = 'img4.jpg'
+imgPath = 'zidane.jpg'
 img = pltim.imread(imgPath)
 Show(img)

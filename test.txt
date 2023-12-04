@@ -1,0 +1,8 @@
+For each i in image_array:
+	For each j in i:
+        Output = 0
+        For x in kernel_array:
+            For y in x:
+                If y in same position as j
+                Output += current_kernel_element*current_image_pixel
+        Output_image_array[I, j] = output
